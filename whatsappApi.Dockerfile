@@ -8,7 +8,8 @@ WORKDIR /usr/src/app
 # ENV CHROME_BIN="/usr/bin/chromium-browser" \
 ENV CHROME_BIN="/usr/bin/chromium" \
     # PUPPETEER_SKIP_CHROMIUM_DOWNLOAD="true" \
-    NODE_ENV="production"
+    NODE_ENV="production" \
+    TZ="Asia/Jakarta"
 
 RUN apt-get update \
   && apt-get install -y \
@@ -51,6 +52,7 @@ RUN apt-get update \
   lsb-release \
   xdg-utils \
   chromium \
+  tzdata \
   && rm -rf /var/lib/apt/lists/*
 
 # Copy package.json and package-lock.json to the working directory

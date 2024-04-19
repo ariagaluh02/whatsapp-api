@@ -314,55 +314,74 @@ const initializeEvents = (client, sessionId) => {
       client.on('ready', async () => {
         triggerWebhook(sessionWebhook, sessionId, 'ready')
         // CustomFunction untuk mengirim pesan otomatis ke wa yang tercantum di db
-        try {
-          console.log('Getting phone numbers and messages from the database...');
-          // Connect to the database
-          await sql.connect(config);
-          console.log('Connected to database, trying to get phone numbers and messages...');
-  
-          // Query untuk ambil no hp dan message dari db
-          const result = await sql.query(`
-              SELECT PHONE, MESSAGE
-              FROM WEB_WHATSAPP`);
-  
-          // Close database connection
-          await sql.close();
-          console.log('Phone numbers and messages retrieved...');
-  
-          // Extract phone numbers and messages from the result
-          const data = result.recordset;
-  
-          // Iterate through phone numbers and messages and send WhatsApp messages
-          for (let i = 0; i < data.length; i++) {
-            const { PHONE, MESSAGE, SENT_TIME } = data[i];
-            const formattedPhoneNumber = `${PHONE}@c.us`; // Format phone number
-            try {
-                await client.sendMessage(formattedPhoneNumber, MESSAGE, SENT_TIME);
-                console.log(`Message sent to ${formattedPhoneNumber}`);
+        // Function to periodically check for new messages in the database and send them
+        async function sendMessages() {
+          try {
+            const currentTime = new Date().toLocaleString();
+            console.log(`(${currentTime}) - Getting phone numbers and messages from the database...`);
+            // Connect to the database
+            await sql.connect(config);
+            console.log(`(${currentTime}) - Connected to database ...`);
 
-                // Update the SENT_TIME column with the current time
+            // Query ambil phone number dan messages dari db
+            const result = await sql.query(`
+              SELECT PHONE, MESSAGE, SENT_TIME, STATUS
+              FROM WEB_WHATSAPP
+              WHERE STATUS = 'NEW' AND (SENT_TIME IS NULL OR SENT_TIME = '')`);
+
+            // Close database connection
+            await sql.close();
+            console.log(`(${currentTime}) - Retrieving phone number with STATUS = "NEW"`);
+
+            // Extract phone numbers, messages, dan status dari result
+            const data = result.recordset;
+
+            // Logs no phone number
+            if (data.length === 0) {
+                const currentTime = new Date().toLocaleString();
+                console.log(`(${currentTime}) - No phone number with STATUS = "NEW"`);
+            } 
+
+            // Perulangan untuk mengirim pesan Whatsapp
+            for (let i = 0; i < data.length; i++) {
+              const { PHONE, MESSAGE, SENT_TIME, STATUS } = data[i];
+              const formattedPhoneNumber = `${PHONE}@c.us`; // Format phone number
+              try {
+                // If SENT_TIME is null or empty, set it to current time
+                const sentTime = SENT_TIME ? SENT_TIME : new Date();
+                const currentTime = new Date().toLocaleString();
+                await client.sendMessage(formattedPhoneNumber, MESSAGE, sentTime, STATUS);
+                console.log(`(${currentTime}) - Message sent to ${formattedPhoneNumber}`);
+
+                // Update SENT_TIME column with the current time and STATUS to "SENT"
                 await sql.connect(config);
                 await sql.query(`
-                    UPDATE WEB_WHATSAPP
-                    SET SENT_TIME = GETDATE() 
-                    WHERE PHONE = '${PHONE}'`);
+                  UPDATE WEB_WHATSAPP
+                  SET SENT_TIME = GETDATE(),
+                      STATUS = 'SENT'
+                  WHERE PHONE = '${PHONE}'`);
                 await sql.close();
-                console.log(`SENT_TIME updated for ${formattedPhoneNumber}`);
-                await delay(3000);
-            } catch (err) {
-                console.error(`Error sending message to ${formattedPhoneNumber}:`, err);
+                console.log(`(${currentTime}) - STATUS and SENT_TIME updated for ${formattedPhoneNumber}`);
+                await delay(3000); // Add a delay before sending the next message
+              } catch (err) {
+                console.error(`(${currentTime}) - Error sending message to ${formattedPhoneNumber}:`, err);
+              }
             }
+          } catch (error) {
+            console.error('Error:', error.message);
+          }
         }
-        } catch (error) {
-          console.error('Error:', error.message);
-        }
+
+        // Function to periodically check for new data and send messages
+        const dataInterval = setInterval(sendMessages, 5 * 60 * 1000); // Every 5 minutes
+        sendMessages();
       })
     })
 
-// Function to create a delay using Promises
-function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+  // Function to create a delay using Promises
+  function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
   
 
   checkIfEventisEnabled('contact_changed')
