@@ -4,6 +4,8 @@ const path = require('path')
 const sessions = new Map()
 const { baseWebhookURL, sessionFolderPath, maxAttachmentSize, setMessagesAsSeen, webVersion, webVersionCacheType, recoverSessions } = require('./config')
 const { triggerWebhook, waitForNestedObject, checkIfEventisEnabled } = require('./utils')
+const sql = require('mssql');
+const { sendMessage } = require('./data.js')
 
 // Function to validate if the session is ready
 const validateSession = async (sessionId) => {
@@ -93,6 +95,10 @@ const setupSession = (sessionId) => {
         executablePath: process.env.CHROME_BIN || null,
         // headless: false,
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu', '--disable-dev-shm-usage']
+      },
+      webVersionCache: {
+        type: 'remote',
+        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
       },
       userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36',
       authStrategy: localAuth
@@ -293,12 +299,71 @@ const initializeEvents = (client, sessionId) => {
       })
   })
 
+  const config = {
+    user: 'Dev_sa',
+    password: 'P3ndekarK3ra2019',
+    server: '10.102.8.103\\Komix',
+    database: 'WA_Broadcast',
+    options: {
+        trustServerCertificate: true // Add this line to disable SSL verification
+      }
+  };
+
   checkIfEventisEnabled('ready')
     .then(_ => {
-      client.on('ready', () => {
+      client.on('ready', async () => {
         triggerWebhook(sessionWebhook, sessionId, 'ready')
+        // CustomFunction untuk mengirim pesan otomatis ke wa yang tercantum di db
+        try {
+          console.log('Getting phone numbers and messages from the database...');
+          // Connect to the database
+          await sql.connect(config);
+          console.log('Connected to database, trying to get phone numbers and messages...');
+  
+          // Query untuk ambil no hp dan message dari db
+          const result = await sql.query(`
+              SELECT PHONE, MESSAGE
+              FROM WEB_WHATSAPP`);
+  
+          // Close database connection
+          await sql.close();
+          console.log('Phone numbers and messages retrieved...');
+  
+          // Extract phone numbers and messages from the result
+          const data = result.recordset;
+  
+          // Iterate through phone numbers and messages and send WhatsApp messages
+          for (let i = 0; i < data.length; i++) {
+            const { PHONE, MESSAGE, SENT_TIME } = data[i];
+            const formattedPhoneNumber = `${PHONE}@c.us`; // Format phone number
+            try {
+                await client.sendMessage(formattedPhoneNumber, MESSAGE, SENT_TIME);
+                console.log(`Message sent to ${formattedPhoneNumber}`);
+
+                // Update the SENT_TIME column with the current time
+                await sql.connect(config);
+                await sql.query(`
+                    UPDATE WEB_WHATSAPP
+                    SET SENT_TIME = GETDATE() 
+                    WHERE PHONE = '${PHONE}'`);
+                await sql.close();
+                console.log(`SENT_TIME updated for ${formattedPhoneNumber}`);
+                await delay(3000);
+            } catch (err) {
+                console.error(`Error sending message to ${formattedPhoneNumber}:`, err);
+            }
+        }
+        } catch (error) {
+          console.error('Error:', error.message);
+        }
       })
     })
+
+// Function to create a delay using Promises
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+  
 
   checkIfEventisEnabled('contact_changed')
     .then(_ => {
@@ -385,6 +450,7 @@ const flushSessions = async (deleteOnlyInactive) => {
 module.exports = {
   sessions,
   setupSession,
+  sendMessage,
   restoreSessions,
   validateSession,
   deleteSession,

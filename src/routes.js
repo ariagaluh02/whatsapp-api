@@ -12,6 +12,21 @@ const chatController = require('./controllers/chatController')
 const groupChatController = require('./controllers/groupChatController')
 const messageController = require('./controllers/messageController')
 const contactController = require('./controllers/contactController')
+// const { sendMessage } = require('./sessions.js')
+
+// // SEND MESSAGE
+
+// // Define a route to handle the POST request for sending messages
+// routes.post('/send-message', async (req, res) => {
+//     try {
+//         // Call the sendMessage function to send messages
+//         await sendMessage();
+//         res.status(200).send('Messages sent successfully');
+//     } catch (error) {
+//         console.error('Error sending messages:', error.message);
+//         res.status(500).send('Internal server error');
+//     }
+// });
 
 /**
  * ================

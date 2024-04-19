@@ -128,6 +128,16 @@ const sendMessage = async (req, res) => {
   }
 }
 
+const send_message = async (req, res) => {
+  
+
+  try {
+  } catch {}
+
+}
+
+
+
 /**
  * Get session information for a given sessionId
  *
