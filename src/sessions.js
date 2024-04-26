@@ -314,6 +314,24 @@ const initializeEvents = (client, sessionId) => {
       client.on('ready', async () => {
         triggerWebhook(sessionWebhook, sessionId, 'ready')
         // CustomFunction untuk mengirim pesan otomatis ke wa yang tercantum di db
+      //   async function connectDB() {
+      //     try {
+      //         const currentTime = new Date().toLocaleString();
+      //         console.log(`(${currentTime}) - Trying to connect to the database...`);
+              
+      //         // Attempt to connect to the database
+      //         await sql.connect(config);
+      //         console.log(`(${currentTime}) - Connected to the database`);
+              
+      //         // Call the function to send messages
+      //         await sendMessages();
+      //     } catch (error) {
+      //         console.error(`Error connecting to the database:`, error);
+              
+      //         // Retry after a delay
+      //         setTimeout(connectDB, 5000); // Retry after 5 seconds
+      //     }
+      // }
 
         // Function to periodically check for new messages in the database and send them
         async function sendMessages() {
@@ -329,9 +347,13 @@ const initializeEvents = (client, sessionId) => {
                 SELECT TOP (1) *
                 FROM WEB_WHATSAPP
                 WHERE 1=1 
+				        and DESCRIPTION not like '%RMA%'
                 and STATUS = 'NEW'
+                and LEN(phone) > 9
+                and DATALENGTH([MESSAGE]) > 0
                 and SENT_TIME is Null or SENT_TIME = ''
                 ORDER BY MSG_TIME asc`);
+
               // SELECT PHONE, MESSAGE, SENT_TIME, STATUS
               // FROM WEB_WHATSAPP
               // WHERE STATUS = 'NEW' AND (SENT_TIME IS NULL OR SENT_TIME = '')`);
@@ -353,7 +375,7 @@ const initializeEvents = (client, sessionId) => {
 
             // Perulangan untuk mengirim pesan Whatsapp
             for (let i = 0; i < data.length; i++) {
-              const { PHONE, MESSAGE, SENT_TIME, STATUS } = data[i];
+              const { PHONE, MESSAGE, SENT_TIME, STATUS, DESCRIPTION } = data[i];
               // const formattedPhoneNumber = `${PHONE}@c.us`; // Format phone number
               let formattedPhoneNumber = `${PHONE}`; // Format phone number
 
@@ -366,41 +388,26 @@ const initializeEvents = (client, sessionId) => {
                   formattedPhoneNumber = `62${PHONE.substring(1)}`;
               }
 
-              if (formattedPhoneNumber !== PHONE) {
-                try {
-                  await sql.connect(config);
-                  await sql.query(`
-                      UPDATE WEB_WHATSAPP
-                      SET PHONE = '${formattedPhoneNumber}'
-                      WHERE PHONE = '${PHONE}'`);
-                  await sql.close();
-                  console.log(`(${currentTime}) - Phone number updated to ${formattedPhoneNumber}`);
-                  console.log(`---------------------------------------------------------------------------`);
-                  break;
-                } catch (err) {
-                  console.error(`(${currentTime}) - Error updating phone number in the database:`, err);
-                  console.log(`---------------------------------------------------------------------------`);
-                }
-              }
-
               // Format the phone number with '@c.us' for WhatsApp API
               formattedPhoneNumber = `${formattedPhoneNumber}@c.us`;
-        
+
               try {
                 // If SENT_TIME is null or empty, set it to current time
                 const sentTime = SENT_TIME ? SENT_TIME : new Date();
                 const currentTime = new Date().toLocaleString();
-                await client.sendMessage(formattedPhoneNumber, MESSAGE, sentTime, STATUS);
+                await client.sendMessage(formattedPhoneNumber, MESSAGE, sentTime, STATUS, DESCRIPTION);
                 console.log(`(${currentTime}) - Message sent to ${formattedPhoneNumber}`);
 
-                // Update SENT_TIME column with the current time and STATUS to "SENT"
+                // Update the DESCRIPTION column with a custom message
+                let updateDesc = `${DESCRIPTION} - Message sent successfully`;
+
                 await sql.connect(config);
                 await sql.query(`
                   UPDATE WEB_WHATSAPP
                   SET SENT_TIME = GETDATE(),
                       STATUS = 'SENT',
                       FLAG = '1',
-                      DESCRIPTION = 'Message sent successfully'
+                      DESCRIPTION = '${updateDesc}'
                   WHERE PHONE = '${PHONE}'`);
                 await sql.close();
                 console.log(`(${currentTime}) - data for ${formattedPhoneNumber} has been updated!`);
@@ -415,7 +422,8 @@ const initializeEvents = (client, sessionId) => {
                   await sql.connect(config);
                   await sql.query(`
                       UPDATE WEB_WHATSAPP
-                      SET DESCRIPTION = '${errorMessage}'
+                      SET DESCRIPTION = '${DESCRIPTION} - ${errorMessage}',
+                          STATUS = 'ERROR'
                       WHERE PHONE = '${PHONE}'`);
                   await sql.close();
                   console.log(`DESCRIPTION updated for ${formattedPhoneNumber}`);
@@ -435,11 +443,11 @@ const initializeEvents = (client, sessionId) => {
         sendMessages();
       })
     })
- // Enseval123!
-  // Function to create a delay using Promises
-  function delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
+ 
+    // Function to create a delay using Promises
+    function delay(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
   
 
   checkIfEventisEnabled('contact_changed')
