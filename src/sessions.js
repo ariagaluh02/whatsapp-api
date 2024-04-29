@@ -6,6 +6,7 @@ const { baseWebhookURL, sessionFolderPath, maxAttachmentSize, setMessagesAsSeen,
 const { triggerWebhook, waitForNestedObject, checkIfEventisEnabled } = require('./utils')
 const sql = require('mssql');
 const { sendMessage } = require('./data.js')
+require('dotenv').config();
 
 // Function to validate if the session is ready
 const validateSession = async (sessionId) => {
@@ -300,10 +301,10 @@ const initializeEvents = (client, sessionId) => {
   })
 
   const config = {
-    user: 'Dev_sa',
-    password: 'P3ndekarK3ra2019',
-    server: '10.102.8.103\\Komix',
-    database: 'WA_Broadcast',
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    server: process.env.DB_HOST,
+    database: process.env.DB_NAME,
     options: {
       trustServerCertificate: true // Add this line to disable SSL verification
     }
