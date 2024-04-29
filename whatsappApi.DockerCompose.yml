@@ -1,10 +1,10 @@
 services:
-  hermes:
-    container_name: hermes
+  hera:
+    container_name: hera
     # build: .
     # image: devops-epm/whatsapp-api:3.0.1 # Pull the image locally
     # image: devops-epm/hermes:1.0.0 # Pull the image locally
-    image: devops-epm/hermes:1.0.1 # Pull the image locally
+    image: epm-devops/hera:1.0.0 # Pull the image locally
     restart: always
     ports:
       - "3000:3000"

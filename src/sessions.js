@@ -305,42 +305,39 @@ const initializeEvents = (client, sessionId) => {
     server: '10.102.8.103\\Komix',
     database: 'WA_Broadcast',
     options: {
-        trustServerCertificate: true // Add this line to disable SSL verification
-      }
+      trustServerCertificate: true // Add this line to disable SSL verification
+    }
   };
 
   checkIfEventisEnabled('ready')
     .then(_ => {
       client.on('ready', async () => {
         triggerWebhook(sessionWebhook, sessionId, 'ready')
+
         // CustomFunction untuk mengirim pesan otomatis ke wa yang tercantum di db
-      //   async function connectDB() {
-      //     try {
-      //         const currentTime = new Date().toLocaleString();
-      //         console.log(`(${currentTime}) - Trying to connect to the database...`);
-              
-      //         // Attempt to connect to the database
-      //         await sql.connect(config);
-      //         console.log(`(${currentTime}) - Connected to the database`);
-              
-      //         // Call the function to send messages
-      //         await sendMessages();
-      //     } catch (error) {
-      //         console.error(`Error connecting to the database:`, error);
-              
-      //         // Retry after a delay
-      //         setTimeout(connectDB, 5000); // Retry after 5 seconds
-      //     }
-      // }
+        async function connectDB() {
+          try {
+            const currentTime = new Date().toLocaleString();
+            // console.log(`(${currentTime}) - Trying to connect to the database...`);
+
+            // Attempt to connect to the database
+            await sql.connect(config);
+            console.log(`(${currentTime}) - Connected to the database`);
+
+            // Call the function to send messages
+            await sendMessages();
+          } catch (error) {
+            console.error(`Error connecting to the database:`, error);
+            // Retry after a delay
+            setTimeout(connectDB, 5000); // Retry after 4 seconds
+          }
+        }
 
         // Function to periodically check for new messages in the database and send them
         async function sendMessages() {
           try {
             const currentTime = new Date().toLocaleString();
             // console.log(`(${currentTime}) - Getting phone numbers and messages from the database...`);
-            // Connect to the database
-            await sql.connect(config);
-            console.log(`(${currentTime}) - Connected to database ...`);
 
             // Query ambil phone number dan messages dari db
             const result = await sql.query(`
@@ -348,30 +345,26 @@ const initializeEvents = (client, sessionId) => {
                 FROM WEB_WHATSAPP
                 WHERE 1=1 
 				        and DESCRIPTION not like '%RMA%'
-                and STATUS = 'NEW'
+                and STATUS = 'New'
                 and LEN(phone) > 9
                 and DATALENGTH([MESSAGE]) > 0
                 and SENT_TIME is Null or SENT_TIME = ''
-                ORDER BY MSG_TIME asc`);
-
-              // SELECT PHONE, MESSAGE, SENT_TIME, STATUS
-              // FROM WEB_WHATSAPP
-              // WHERE STATUS = 'NEW' AND (SENT_TIME IS NULL OR SENT_TIME = '')`);
-
-            // Close database connection
-            await sql.close();
-            console.log(`(${currentTime}) - Retrieving phone number and message ...`);
-            // console.log(`(${currentTime}) - Retrieving phone number with STATUS = "NEW"`);
+                ORDER BY MSG_TIME asc`
+            );
 
             // Extract phone numbers, messages, dan status dari result
             const data = result.recordset;
 
+            // Close database connection
+            await sql.close();
+            console.log(`(${currentTime}) - Retrieving phone number and message ...`);
+
             // Logs no phone number
             if (data.length === 0) {
-                const currentTime = new Date().toLocaleString();
-                console.log(`(${currentTime}) - No phone number with STATUS = "NEW"`);
-                console.log(`---------------------------------------------------------------------------`);
-            } 
+              const currentTime = new Date().toLocaleString();
+              console.log(`(${currentTime}) - No phone number with STATUS = "New"`);
+              console.log(`---------------------------------------------------------------------------`);
+            }
 
             // Perulangan untuk mengirim pesan Whatsapp
             for (let i = 0; i < data.length; i++) {
@@ -379,13 +372,13 @@ const initializeEvents = (client, sessionId) => {
               // const formattedPhoneNumber = `${PHONE}@c.us`; // Format phone number
               let formattedPhoneNumber = `${PHONE}`; // Format phone number
 
-              // Preprocess phone number to ensure consistent format
+              // Filter nomor selain 62
               if (PHONE.startsWith('+62')) {
-                  // If phone number starts with '+62', remove the '+' sign
-                  formattedPhoneNumber = PHONE.substring(1);
+                // If phone number starts with '+62', remove the '+' sign
+                formattedPhoneNumber = PHONE.substring(1);
               } else if (PHONE.startsWith('08')) {
-                  // If phone number starts with '08', prepend '62' to convert it to international format
-                  formattedPhoneNumber = `62${PHONE.substring(1)}`;
+                // If phone number starts with '08', prepend '62' to convert it to international format
+                formattedPhoneNumber = `62${PHONE.substring(1)}`;
               }
 
               // Format the phone number with '@c.us' for WhatsApp API
@@ -405,7 +398,7 @@ const initializeEvents = (client, sessionId) => {
                 await sql.query(`
                   UPDATE WEB_WHATSAPP
                   SET SENT_TIME = GETDATE(),
-                      STATUS = 'SENT',
+                      STATUS = 'Sent',
                       FLAG = '1',
                       DESCRIPTION = '${updateDesc}'
                   WHERE PHONE = '${PHONE}'`);
@@ -423,32 +416,38 @@ const initializeEvents = (client, sessionId) => {
                   await sql.query(`
                       UPDATE WEB_WHATSAPP
                       SET DESCRIPTION = '${DESCRIPTION} - ${errorMessage}',
-                          STATUS = 'ERROR'
+                          STATUS = 'Error'
                       WHERE PHONE = '${PHONE}'`);
                   await sql.close();
                   console.log(`DESCRIPTION updated for ${formattedPhoneNumber}`);
                 } catch (error) {
-                    console.error(`Error updating DESCRIPTION for ${formattedPhoneNumber}:`, error);
+                  console.error(`Error updating DESCRIPTION for ${formattedPhoneNumber}:`, error);
                 }
 
               }
+
+              // ga perlu karena udah di looping oleh function connectDB
+              // await delay(3000);
             }
           } catch (error) {
             console.error('Error:', error.message);
+          } finally {
+            // Schedule next execution
+            setTimeout(connectDB, 5000);
           }
         }
 
         // Function to periodically check for new data and send messages
-        const dataInterval = setInterval(sendMessages, 4 * 1000); // Every 4 sec
-        sendMessages();
+        // const dataInterval = setInterval(sendMessages, 4 * 1000); // Every 4 sec
+        connectDB();
       })
     })
- 
-    // Function to create a delay using Promises
-    function delay(ms) {
-      return new Promise(resolve => setTimeout(resolve, ms));
-    }
-  
+
+  // Function to create a delay using Promises
+  function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
 
   checkIfEventisEnabled('contact_changed')
     .then(_ => {
