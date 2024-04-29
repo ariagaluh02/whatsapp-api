@@ -5,7 +5,6 @@ const sessions = new Map()
 const { baseWebhookURL, sessionFolderPath, maxAttachmentSize, setMessagesAsSeen, webVersion, webVersionCacheType, recoverSessions } = require('./config')
 const { triggerWebhook, waitForNestedObject, checkIfEventisEnabled } = require('./utils')
 const sql = require('mssql');
-const { sendMessage } = require('./data.js')
 require('dotenv').config();
 
 // Function to validate if the session is ready
@@ -535,7 +534,6 @@ const flushSessions = async (deleteOnlyInactive) => {
 module.exports = {
   sessions,
   setupSession,
-  sendMessage,
   restoreSessions,
   validateSession,
   deleteSession,
